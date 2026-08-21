@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
@@ -33,7 +34,11 @@ public class MainActivity extends Activity {
 
     private DBHelper db;
     private SharedPreferences prefs;
+
     private TextView statusText;
+    private TextView statusBadge;
+    private TextView rulesCountText;
+    private TextView logsCountText;
     private Button roleButton;
     private Button contactsButton;
     private LinearLayout rulesContainer;
@@ -66,69 +71,94 @@ public class MainActivity extends Activity {
     private View buildUi() {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
+        scroll.setBackgroundColor(0xFFF5F7FB);
 
         LinearLayout root = vertical();
-        root.setPadding(dp(18), dp(18), dp(18), dp(32));
+        root.setPadding(dp(16), dp(16), dp(16), dp(28));
         root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         scroll.addView(root, new ScrollView.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        TextView title = text("مسدودکننده تماس", 26, true);
-        root.addView(title);
+        LinearLayout heroCard = card(0xFFFFFFFF, 0xFFE2E8F0, 22, 18);
+        heroCard.addView(titleText("🛡️ مسدودکننده تماس"));
 
-        TextView desc = text("شماره کامل یا پیش‌شماره وارد کنید. برای پیش‌شماره در انتها * بگذارید؛ مثال: 092130*", 15, false);
-        desc.setPadding(0, dp(8), 0, dp(18));
-        root.addView(desc);
+        TextView subtitle = bodyText("شماره کامل یا پیش‌شماره را تعریف کن؛ تماس‌های مطابق قانون به‌صورت خودکار رد می‌شوند و در لاگ داخلی ثبت می‌شوند.");
+        subtitle.setPadding(0, dp(10), 0, dp(14));
+        heroCard.addView(subtitle);
 
-        statusText = text("", 16, true);
-        root.addView(statusText);
+        LinearLayout statusRow = new LinearLayout(this);
+        statusRow.setOrientation(LinearLayout.HORIZONTAL);
+        statusRow.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        statusRow.setGravity(Gravity.CENTER_VERTICAL);
 
-        roleButton = button("فعال‌سازی مسدودکننده تماس");
+        statusText = new TextView(this);
+        statusText.setTextSize(17);
+        statusText.setTypeface(Typeface.DEFAULT_BOLD);
+        statusText.setTextColor(0xFF111827);
+        statusRow.addView(statusText, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+
+        statusBadge = badge("—", 0xFFE5E7EB, 0xFF4B5563);
+        statusRow.addView(statusBadge);
+        heroCard.addView(statusRow);
+
+        LinearLayout statsRow = new LinearLayout(this);
+        statsRow.setOrientation(LinearLayout.HORIZONTAL);
+        statsRow.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        statsRow.setPadding(0, dp(14), 0, dp(2));
+
+        rulesCountText = metricCard("قوانین", "0");
+        logsCountText = metricCard("لاگ‌ها", "0");
+        statsRow.addView(rulesCountText, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        LinearLayout.LayoutParams lpGap = new LinearLayout.LayoutParams(dp(10), 1);
+        View gap = new View(this);
+        statsRow.addView(gap, lpGap);
+        statsRow.addView(logsCountText, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        heroCard.addView(statsRow);
+
+        roleButton = primaryButton("فعال‌سازی مسدودکننده تماس");
         roleButton.setOnClickListener(v -> toggleCallBlocker());
-        root.addView(roleButton, matchWrapMargins(0, 8, 0, 8));
+        heroCard.addView(roleButton, matchWrapMargins(0, 14, 0, 10));
 
-        contactsButton = button("اجازه بررسی شماره‌های ذخیره‌شده");
+        contactsButton = secondaryButton("اجازه بررسی شماره‌های ذخیره‌شده");
         contactsButton.setOnClickListener(v -> requestContactsPermission());
-        root.addView(contactsButton, matchWrapMargins(0, 0, 0, 22));
+        heroCard.addView(contactsButton);
 
-        root.addView(section("قوانین مسدودسازی"));
+        root.addView(heroCard);
+
+        LinearLayout addRuleCard = sectionCard("افزودن قانون", "برای پیش‌شماره در انتها * بگذار؛ مثل 092130*");
 
         ruleInput = new EditText(this);
-        ruleInput.setHint("مثال: 09131101212 یا 092130*");
-        ruleInput.setSingleLine(true);
-        ruleInput.setTextDirection(View.TEXT_DIRECTION_LTR);
-        ruleInput.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-        ruleInput.setInputType(InputType.TYPE_CLASS_PHONE);
-        root.addView(ruleInput, matchWrapMargins(0, 8, 0, 8));
+        styleInput(ruleInput, "مثال: 09131101212 یا 092130*");
+        addRuleCard.addView(ruleInput, matchWrapMargins(0, 8, 0, 10));
 
-        Button add = button("افزودن قانون");
+        Button add = primaryButton("افزودن قانون جدید");
         add.setOnClickListener(v -> addRule());
-        root.addView(add, matchWrapMargins(0, 0, 0, 12));
+        addRuleCard.addView(add);
+        root.addView(addRuleCard, matchWrapMargins(0, 14, 0, 0));
 
+        LinearLayout rulesCard = sectionCard("قوانین مسدودسازی", "شماره‌ها و پیش‌شماره‌هایی که باید ریجکت شوند");
         rulesContainer = vertical();
-        root.addView(rulesContainer);
+        rulesCard.addView(rulesContainer, matchWrapMargins(0, 6, 0, 0));
+        root.addView(rulesCard, matchWrapMargins(0, 14, 0, 0));
 
-        root.addView(section("نگهداری لاگ"));
+        LinearLayout settingsCard = sectionCard("تنظیمات لاگ", "مدت نگهداری لاگ تماس‌های ردشده را مشخص کن");
         retentionSpinner = new Spinner(this);
-        root.addView(retentionSpinner, matchWrapMargins(0, 8, 0, 18));
+        retentionSpinner.setBackground(makeRounded(0xFFF8FAFC, 0xFFD7DEEA, 16, 1));
+        settingsCard.addView(retentionSpinner, matchWrapMargins(0, 8, 0, 0));
+        root.addView(settingsCard, matchWrapMargins(0, 14, 0, 0));
 
-        LinearLayout logHeader = new LinearLayout(this);
-        logHeader.setOrientation(LinearLayout.HORIZONTAL);
-        logHeader.setGravity(Gravity.CENTER_VERTICAL);
-        logHeader.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
-        TextView logTitle = section("تماس‌های ردشده");
-        logHeader.addView(logTitle, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        Button clear = button("پاک کردن لاگ");
+        LinearLayout logCard = sectionCard("تماس‌های ردشده", "آخرین تماس‌هایی که توسط برنامه مسدود شده‌اند");
+        Button clear = dangerButton("پاک کردن لاگ");
         clear.setOnClickListener(v -> confirmClearLogs());
-        logHeader.addView(clear);
-        root.addView(logHeader);
+        logCard.addView(clear, wrapWrapMargins(0, 4, 0, 8));
 
         logsContainer = vertical();
-        root.addView(logsContainer);
+        logCard.addView(logsContainer);
 
-        TextView foot = text("Retention هنگام باز شدن برنامه و هنگام دریافت تماس اعمال می‌شود.", 12, false);
-        foot.setPadding(0, dp(18), 0, 0);
-        root.addView(foot);
+        TextView foot = footnoteText("Retention هنگام باز شدن برنامه و همین‌طور موقع دریافت تماس اعمال می‌شود.");
+        foot.setPadding(0, dp(12), 0, 0);
+        logCard.addView(foot);
+        root.addView(logCard, matchWrapMargins(0, 14, 0, 0));
 
         return scroll;
     }
@@ -154,7 +184,8 @@ public class MainActivity extends Activity {
             }
 
             @Override
-            public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+            public void onNothingSelected(android.widget.AdapterView<?> parent) {
+            }
         });
     }
 
@@ -170,6 +201,7 @@ public class MainActivity extends Activity {
         if (added) {
             ruleInput.setText("");
             refreshRules();
+            Toast.makeText(this, "قانون با موفقیت اضافه شد", Toast.LENGTH_SHORT).show();
         } else {
             Toast.makeText(this, "این قانون قبلاً وجود دارد", Toast.LENGTH_SHORT).show();
         }
@@ -178,61 +210,83 @@ public class MainActivity extends Activity {
     private void refreshRules() {
         rulesContainer.removeAllViews();
         List<DBHelper.Rule> rules = db.getRules();
+        setMetricValue(rulesCountText, String.valueOf(rules.size()));
+
         if (rules.isEmpty()) {
-            TextView empty = text("هنوز قانونی تعریف نشده است.", 14, false);
-            empty.setPadding(0, dp(4), 0, dp(14));
-            rulesContainer.addView(empty);
+            rulesContainer.addView(emptyState("هنوز قانونی تعریف نشده است.", "اولین شماره یا پیش‌شماره را از بخش بالا اضافه کن."));
             return;
         }
 
         for (DBHelper.Rule rule : rules) {
-            LinearLayout row = new LinearLayout(this);
+            LinearLayout row = card(0xFFF8FAFC, 0xFFE3E8F2, 16, 12);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setPadding(0, dp(5), 0, dp(5));
             row.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
 
+            LinearLayout textWrap = vertical();
             String shown = rule.pattern + (rule.prefix ? "*" : "");
-            TextView label = text(shown + (rule.prefix ? "  — پیش‌شماره" : "  — شماره کامل"), 16, false);
+            TextView label = new TextView(this);
+            label.setText(shown);
+            label.setTextSize(17);
+            label.setTypeface(Typeface.DEFAULT_BOLD);
+            label.setTextColor(0xFF111827);
             label.setTextDirection(View.TEXT_DIRECTION_LTR);
-            row.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+            textWrap.addView(label);
 
-            Button del = button("حذف");
+            TextView sub = bodyText(rule.prefix ? "نوع قانون: پیش‌شماره" : "نوع قانون: شماره کامل");
+            sub.setTextSize(13);
+            sub.setPadding(0, dp(4), 0, 0);
+            textWrap.addView(sub);
+
+            row.addView(textWrap, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+
+            Button del = dangerButton("حذف");
             del.setOnClickListener(v -> {
                 db.deleteRule(rule.id);
                 refreshRules();
             });
-            row.addView(del);
-            rulesContainer.addView(row);
+            row.addView(del, wrapWrapMargins(8, 0, 0, 0));
+
+            rulesContainer.addView(row, matchWrapMargins(0, 0, 0, 10));
         }
     }
 
     private void refreshLogs() {
         logsContainer.removeAllViews();
         List<DBHelper.BlockedLog> logs = db.getLogs(200);
+        setMetricValue(logsCountText, String.valueOf(logs.size()));
+
         if (logs.isEmpty()) {
-            TextView empty = text("تماس ردشده‌ای ثبت نشده است.", 14, false);
-            empty.setPadding(0, dp(8), 0, 0);
-            logsContainer.addView(empty);
+            logsContainer.addView(emptyState("تماس ردشده‌ای ثبت نشده است.", "بعد از اولین ریجکت، جزئیات تماس اینجا نمایش داده می‌شود."));
             return;
         }
 
         SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd  HH:mm:ss", Locale.US);
         for (DBHelper.BlockedLog log : logs) {
-            LinearLayout item = vertical();
-            item.setPadding(0, dp(8), 0, dp(8));
+            LinearLayout item = card(0xFFFFFFFF, 0xFFE5EAF3, 16, 12);
 
-            TextView phone = text(log.phone, 17, true);
+            TextView phone = new TextView(this);
+            phone.setText(log.phone);
+            phone.setTextSize(18);
+            phone.setTypeface(Typeface.DEFAULT_BOLD);
+            phone.setTextColor(0xFF111827);
             phone.setTextDirection(View.TEXT_DIRECTION_LTR);
             item.addView(phone);
-            item.addView(text("قانون: " + log.matchedRule, 13, false));
-            item.addView(text(fmt.format(new Date(log.createdAt)), 13, false));
 
-            View divider = new View(this);
-            divider.setBackgroundColor(0xFFE0E0E0);
-            item.addView(divider, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, dp(1)));
-            logsContainer.addView(item);
+            LinearLayout chips = new LinearLayout(this);
+            chips.setOrientation(LinearLayout.HORIZONTAL);
+            chips.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+            chips.setPadding(0, dp(8), 0, dp(8));
+            chips.addView(badge("قانون: " + log.matchedRule, 0xFFE8F0FE, 0xFF1D4ED8));
+            View spacer = new View(this);
+            chips.addView(spacer, new LinearLayout.LayoutParams(dp(8), 1));
+            chips.addView(badge("رد شد", 0xFFFDECEC, 0xFFB42318));
+            item.addView(chips);
+
+            TextView time = footnoteText(fmt.format(new Date(log.createdAt)));
+            item.addView(time);
+
+            logsContainer.addView(item, matchWrapMargins(0, 0, 0, 10));
         }
     }
 
@@ -283,13 +337,16 @@ public class MainActivity extends Activity {
         boolean blockerEnabled = roleHeld && prefs.getBoolean("blocker_enabled", true);
 
         if (!roleHeld) {
-            statusText.setText("وضعیت: غیرفعال");
+            statusText.setText("وضعیت فعلی: غیرفعال");
+            setBadge(statusBadge, "غیرفعال", 0xFFF3F4F6, 0xFF4B5563);
             roleButton.setText("فعال‌سازی مسدودکننده تماس");
         } else if (blockerEnabled) {
-            statusText.setText("وضعیت: فعال ✓");
+            statusText.setText("وضعیت فعلی: محافظت فعال است");
+            setBadge(statusBadge, "فعال ✓", 0xFFDCFCE7, 0xFF15803D);
             roleButton.setText("غیرفعال کردن مسدودکننده تماس");
         } else {
-            statusText.setText("وضعیت: غیرفعال");
+            statusText.setText("وضعیت فعلی: برنامه غیرفعال است");
+            setBadge(statusBadge, "متوقف", 0xFFFEF3C7, 0xFFB45309);
             roleButton.setText("فعال کردن مسدودکننده تماس");
         }
         roleButton.setEnabled(true);
@@ -297,6 +354,11 @@ public class MainActivity extends Activity {
         boolean contacts = checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED;
         contactsButton.setText(contacts ? "بررسی شماره‌های ذخیره‌شده: فعال ✓" : "اجازه بررسی شماره‌های ذخیره‌شده");
         contactsButton.setEnabled(!contacts);
+        if (contacts) {
+            contactsButton.setAlpha(0.75f);
+        } else {
+            contactsButton.setAlpha(1f);
+        }
     }
 
     @Override
@@ -329,32 +391,167 @@ public class MainActivity extends Activity {
         return l;
     }
 
-    private TextView text(String value, int sp, boolean bold) {
+    private LinearLayout card(int bgColor, int strokeColor, int radiusDp, int paddingDp) {
+        LinearLayout l = vertical();
+        l.setBackground(makeRounded(bgColor, strokeColor, radiusDp, 1));
+        l.setPadding(dp(paddingDp), dp(paddingDp), dp(paddingDp), dp(paddingDp));
+        return l;
+    }
+
+    private GradientDrawable makeRounded(int fillColor, int strokeColor, int radiusDp, int strokeWidthDp) {
+        GradientDrawable shape = new GradientDrawable();
+        shape.setColor(fillColor);
+        shape.setCornerRadius(dp(radiusDp));
+        shape.setStroke(dp(strokeWidthDp), strokeColor);
+        return shape;
+    }
+
+    private TextView titleText(String value) {
         TextView t = new TextView(this);
         t.setText(value);
-        t.setTextSize(sp);
-        t.setTextColor(0xFF202124);
-        t.setGravity(Gravity.START);
-        if (bold) t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        t.setTextSize(27);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setTextColor(0xFF0F172A);
         return t;
     }
 
-    private TextView section(String value) {
-        TextView t = text(value, 20, true);
-        t.setPadding(0, dp(18), 0, dp(4));
+    private TextView bodyText(String value) {
+        TextView t = new TextView(this);
+        t.setText(value);
+        t.setTextSize(14);
+        t.setLineSpacing(0f, 1.15f);
+        t.setTextColor(0xFF475569);
         return t;
     }
 
-    private Button button(String value) {
+    private TextView footnoteText(String value) {
+        TextView t = bodyText(value);
+        t.setTextSize(12);
+        t.setTextColor(0xFF64748B);
+        return t;
+    }
+
+    private TextView badge(String value, int bgColor, int textColor) {
+        TextView t = new TextView(this);
+        t.setText(value);
+        t.setTextSize(12);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setTextColor(textColor);
+        t.setPadding(dp(10), dp(6), dp(10), dp(6));
+        t.setBackground(makeRounded(bgColor, bgColor, 999, 1));
+        return t;
+    }
+
+    private void setBadge(TextView target, String value, int bgColor, int textColor) {
+        target.setText(value);
+        target.setTextColor(textColor);
+        target.setBackground(makeRounded(bgColor, bgColor, 999, 1));
+    }
+
+    private TextView metricCard(String label, String value) {
+        TextView t = new TextView(this);
+        t.setText(metricText(label, value));
+        t.setTextColor(0xFF0F172A);
+        t.setTextSize(14);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setGravity(Gravity.CENTER);
+        t.setBackground(makeRounded(0xFFF8FAFC, 0xFFE2E8F0, 18, 1));
+        t.setPadding(dp(12), dp(14), dp(12), dp(14));
+        return t;
+    }
+
+    private void setMetricValue(TextView textView, String value) {
+        CharSequence current = textView.getText();
+        String source = current == null ? "" : current.toString();
+        String label = source.contains("\n") ? source.substring(0, source.indexOf("\n")) : source;
+        textView.setText(metricText(label, value));
+    }
+
+    private String metricText(String label, String value) {
+        return label + "\n" + value;
+    }
+
+    private LinearLayout sectionCard(String title, String subtitle) {
+        LinearLayout l = card(0xFFFFFFFF, 0xFFE2E8F0, 22, 16);
+        TextView titleView = new TextView(this);
+        titleView.setText(title);
+        titleView.setTextSize(19);
+        titleView.setTypeface(Typeface.DEFAULT_BOLD);
+        titleView.setTextColor(0xFF0F172A);
+        l.addView(titleView);
+
+        TextView subtitleView = bodyText(subtitle);
+        subtitleView.setPadding(0, dp(4), 0, dp(2));
+        l.addView(subtitleView);
+        return l;
+    }
+
+    private void styleInput(EditText editText, String hint) {
+        editText.setHint(hint);
+        editText.setSingleLine(true);
+        editText.setTextDirection(View.TEXT_DIRECTION_LTR);
+        editText.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        editText.setInputType(InputType.TYPE_CLASS_PHONE);
+        editText.setTextSize(16);
+        editText.setPadding(dp(14), dp(14), dp(14), dp(14));
+        editText.setBackground(makeRounded(0xFFF8FAFC, 0xFFD7DEEA, 18, 1));
+    }
+
+    private Button primaryButton(String value) {
+        Button b = baseButton(value);
+        b.setTextColor(0xFFFFFFFF);
+        b.setBackground(makeRounded(0xFF2563EB, 0xFF2563EB, 16, 1));
+        return b;
+    }
+
+    private Button secondaryButton(String value) {
+        Button b = baseButton(value);
+        b.setTextColor(0xFF1D4ED8);
+        b.setBackground(makeRounded(0xFFEFF6FF, 0xFFBFDBFE, 16, 1));
+        return b;
+    }
+
+    private Button dangerButton(String value) {
+        Button b = baseButton(value);
+        b.setTextColor(0xFFB42318);
+        b.setBackground(makeRounded(0xFFFEF2F2, 0xFFFECACA, 14, 1));
+        return b;
+    }
+
+    private Button baseButton(String value) {
         Button b = new Button(this);
         b.setText(value);
         b.setAllCaps(false);
+        b.setTextSize(15);
+        b.setPadding(dp(14), dp(12), dp(14), dp(12));
         return b;
+    }
+
+    private LinearLayout emptyState(String title, String subtitle) {
+        LinearLayout l = card(0xFFF8FAFC, 0xFFE2E8F0, 16, 14);
+        TextView titleView = new TextView(this);
+        titleView.setText(title);
+        titleView.setTypeface(Typeface.DEFAULT_BOLD);
+        titleView.setTextColor(0xFF334155);
+        titleView.setTextSize(15);
+        l.addView(titleView);
+
+        TextView sub = footnoteText(subtitle);
+        sub.setPadding(0, dp(4), 0, 0);
+        l.addView(sub);
+        return l;
     }
 
     private LinearLayout.LayoutParams matchWrapMargins(int l, int t, int r, int b) {
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        p.setMargins(dp(l), dp(t), dp(r), dp(b));
+        return p;
+    }
+
+    private LinearLayout.LayoutParams wrapWrapMargins(int l, int t, int r, int b) {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         p.setMargins(dp(l), dp(t), dp(r), dp(b));
         return p;
     }

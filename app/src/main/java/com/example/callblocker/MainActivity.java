@@ -9,6 +9,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
@@ -31,6 +32,7 @@ import java.util.Locale;
 public class MainActivity extends Activity {
     private static final int REQ_ROLE = 1001;
     private static final int REQ_CONTACTS = 1002;
+    private static final int REQ_NOTIFICATIONS = 1003;
 
     private DBHelper db;
     private SharedPreferences prefs;
@@ -66,6 +68,7 @@ public class MainActivity extends Activity {
         refreshStatus();
         refreshRules();
         refreshLogs();
+        NotificationHelper.sync(this);
     }
 
     private View buildUi() {
@@ -316,8 +319,16 @@ public class MainActivity extends Activity {
         }
 
         boolean enabled = prefs.getBoolean("blocker_enabled", true);
-        prefs.edit().putBoolean("blocker_enabled", !enabled).apply();
+        boolean newEnabled = !enabled;
+        prefs.edit().putBoolean("blocker_enabled", newEnabled).apply();
         refreshStatus();
+
+        if (newEnabled) {
+            ensureNotificationPermission();
+        } else {
+            NotificationHelper.sync(this);
+        }
+
         Toast.makeText(this,
                 enabled ? "مسدودکننده تماس غیرفعال شد" : "مسدودکننده تماس فعال شد",
                 Toast.LENGTH_SHORT).show();
@@ -368,15 +379,37 @@ public class MainActivity extends Activity {
             RoleManager rm = (RoleManager) getSystemService(ROLE_SERVICE);
             if (rm != null && rm.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)) {
                 prefs.edit().putBoolean("blocker_enabled", true).apply();
+                ensureNotificationPermission();
+            } else {
+                NotificationHelper.sync(this);
             }
             refreshStatus();
         }
     }
 
+    private void ensureNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFICATIONS);
+            return;
+        }
+        NotificationHelper.sync(this);
+    }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQ_CONTACTS) refreshStatus();
+        if (requestCode == REQ_CONTACTS) {
+            refreshStatus();
+        } else if (requestCode == REQ_NOTIFICATIONS) {
+            NotificationHelper.sync(this);
+            if (grantResults.length == 0 || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this,
+                        "مسدودسازی فعال است؛ فقط آیکون وضعیت بدون مجوز اعلان نمایش داده نمی‌شود",
+                        Toast.LENGTH_LONG).show();
+            }
+        }
     }
 
     @Override

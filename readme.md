@@ -46,15 +46,3 @@
 ## نکته Android
 
 CallScreeningService باید حداکثر در 5 ثانیه به سیستم پاسخ بدهد. این پروژه فقط lookup محلی SQLite انجام می‌دهد و شبکه استفاده نمی‌کند.
-
-## Build APK without Android Studio (GitHub Actions)
-
-1. Create a new empty GitHub repository.
-2. Upload the contents of this project to the repository root.
-3. Open the repository's **Actions** tab.
-4. Select **Build Android APK**.
-5. Click **Run workflow**.
-6. After the workflow completes, download the artifact named **CallBlocker-debug-apk**.
-7. Extract it and install `app-debug.apk` on the Android phone.
-
-The debug APK is signed automatically with the Android debug key and is suitable for testing.

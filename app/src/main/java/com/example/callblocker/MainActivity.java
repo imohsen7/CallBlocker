@@ -84,7 +84,7 @@ public class MainActivity extends Activity {
         root.addView(statusText);
 
         roleButton = button("فعال‌سازی مسدودکننده تماس");
-        roleButton.setOnClickListener(v -> requestCallScreeningRole());
+        roleButton.setOnClickListener(v -> toggleCallBlocker());
         root.addView(roleButton, matchWrapMargins(0, 8, 0, 8));
 
         contactsButton = button("اجازه بررسی شماره‌های ذخیره‌شده");
@@ -248,18 +248,25 @@ public class MainActivity extends Activity {
                 .show();
     }
 
-    private void requestCallScreeningRole() {
+    private void toggleCallBlocker() {
         RoleManager rm = (RoleManager) getSystemService(ROLE_SERVICE);
         if (rm == null || !rm.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING)) {
             Toast.makeText(this, "Call Screening روی این دستگاه در دسترس نیست", Toast.LENGTH_LONG).show();
             return;
         }
-        if (rm.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)) {
-            Toast.makeText(this, "مسدودکننده تماس فعال است", Toast.LENGTH_SHORT).show();
+
+        if (!rm.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)) {
+            Intent intent = rm.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING);
+            startActivityForResult(intent, REQ_ROLE);
             return;
         }
-        Intent intent = rm.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING);
-        startActivityForResult(intent, REQ_ROLE);
+
+        boolean enabled = prefs.getBoolean("blocker_enabled", true);
+        prefs.edit().putBoolean("blocker_enabled", !enabled).apply();
+        refreshStatus();
+        Toast.makeText(this,
+                enabled ? "مسدودکننده تماس غیرفعال شد" : "مسدودکننده تماس فعال شد",
+                Toast.LENGTH_SHORT).show();
     }
 
     private void requestContactsPermission() {
@@ -272,10 +279,20 @@ public class MainActivity extends Activity {
 
     private void refreshStatus() {
         RoleManager rm = (RoleManager) getSystemService(ROLE_SERVICE);
-        boolean active = rm != null && rm.isRoleHeld(RoleManager.ROLE_CALL_SCREENING);
-        statusText.setText(active ? "وضعیت: فعال ✓" : "وضعیت: غیرفعال");
-        roleButton.setText(active ? "مسدودکننده تماس فعال است" : "فعال‌سازی مسدودکننده تماس");
-        roleButton.setEnabled(!active);
+        boolean roleHeld = rm != null && rm.isRoleHeld(RoleManager.ROLE_CALL_SCREENING);
+        boolean blockerEnabled = roleHeld && prefs.getBoolean("blocker_enabled", true);
+
+        if (!roleHeld) {
+            statusText.setText("وضعیت: غیرفعال");
+            roleButton.setText("فعال‌سازی مسدودکننده تماس");
+        } else if (blockerEnabled) {
+            statusText.setText("وضعیت: فعال ✓");
+            roleButton.setText("غیرفعال کردن مسدودکننده تماس");
+        } else {
+            statusText.setText("وضعیت: غیرفعال");
+            roleButton.setText("فعال کردن مسدودکننده تماس");
+        }
+        roleButton.setEnabled(true);
 
         boolean contacts = checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED;
         contactsButton.setText(contacts ? "بررسی شماره‌های ذخیره‌شده: فعال ✓" : "اجازه بررسی شماره‌های ذخیره‌شده");
@@ -285,7 +302,13 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQ_ROLE) refreshStatus();
+        if (requestCode == REQ_ROLE) {
+            RoleManager rm = (RoleManager) getSystemService(ROLE_SERVICE);
+            if (rm != null && rm.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)) {
+                prefs.edit().putBoolean("blocker_enabled", true).apply();
+            }
+            refreshStatus();
+        }
     }
 
     @Override

@@ -17,10 +17,22 @@ public class CallBlockScreeningService extends CallScreeningService {
         String rawNumber = handle != null ? handle.getSchemeSpecificPart() : "";
         String normalized = PhoneNormalizer.normalize(rawNumber);
 
+        SharedPreferences prefs = getSharedPreferences("settings", MODE_PRIVATE);
+
+        // Keep the system Call Screening role, but allow every call while the
+        // user has disabled blocking from inside the app.
+        if (!prefs.getBoolean("blocker_enabled", true)) {
+            CallResponse response = new CallResponse.Builder()
+                    .setDisallowCall(false)
+                    .setRejectCall(false)
+                    .build();
+            respondToCall(callDetails, response);
+            return;
+        }
+
         DBHelper db = new DBHelper(getApplicationContext());
 
         // Enforce retention opportunistically on every screened incoming call.
-        SharedPreferences prefs = getSharedPreferences("settings", MODE_PRIVATE);
         int retentionDays = prefs.getInt("retention_days", 30);
         db.cleanupLogs(retentionDays);
 

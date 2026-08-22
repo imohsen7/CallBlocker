@@ -31,27 +31,40 @@ public class CallBlockScreeningService extends CallScreeningService {
         }
 
         DBHelper db = new DBHelper(getApplicationContext());
+        try {
+            // Enforce retention opportunistically on every screened incoming call.
+            int retentionDays = prefs.getInt("retention_days", 30);
+            db.cleanupLogs(retentionDays);
 
-        // Enforce retention opportunistically on every screened incoming call.
-        int retentionDays = prefs.getInt("retention_days", 30);
-        db.cleanupLogs(retentionDays);
+            DBHelper.RuleMatch match = db.findMatchingRule(normalized);
+            CallResponse.Builder builder = new CallResponse.Builder();
 
-        String matchedRule = db.findMatchingRule(normalized);
-        boolean shouldBlock = matchedRule != null;
+            if (match == null) {
+                builder.setDisallowCall(false)
+                        .setRejectCall(false);
+            } else if (DBHelper.ACTION_REJECT.equals(match.action)) {
+                // Behaves like a manual reject from the user's point of view.
+                builder.setDisallowCall(true)
+                        .setRejectCall(true)
+                        .setSkipNotification(true);
+                db.addBlockedLog(rawNumber, normalized, match.matchedRule, match.action);
+            } else if (DBHelper.ACTION_SILENCE.equals(match.action)) {
+                // The call is still presented to the dialer, but without ringing.
+                builder.setDisallowCall(false)
+                        .setRejectCall(false)
+                        .setSilenceCall(true);
+                db.addBlockedLog(rawNumber, normalized, match.matchedRule, match.action);
+            } else {
+                // Block without marking it as a manual user rejection.
+                builder.setDisallowCall(true)
+                        .setRejectCall(false)
+                        .setSkipNotification(true);
+                db.addBlockedLog(rawNumber, normalized, match.matchedRule, DBHelper.ACTION_BLOCK);
+            }
 
-        CallResponse.Builder builder = new CallResponse.Builder();
-        if (shouldBlock) {
-            builder.setDisallowCall(true)
-                    .setRejectCall(true)
-                    .setSkipNotification(true);
-
-            db.addBlockedLog(rawNumber, normalized, matchedRule);
-        } else {
-            builder.setDisallowCall(false)
-                    .setRejectCall(false);
+            respondToCall(callDetails, builder.build());
+        } finally {
+            db.close();
         }
-
-        respondToCall(callDetails, builder.build());
-        db.close();
     }
 }

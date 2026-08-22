@@ -46,10 +46,17 @@ public class MainActivity extends Activity {
     private LinearLayout rulesContainer;
     private LinearLayout logsContainer;
     private EditText ruleInput;
+    private Spinner actionSpinner;
     private Spinner retentionSpinner;
 
     private final int[] retentionValues = {7, 30, 90, 365, 0};
     private final String[] retentionLabels = {"۷ روز", "۳۰ روز", "۹۰ روز", "۱ سال", "همیشه"};
+    private final String[] actionValues = {DBHelper.ACTION_BLOCK, DBHelper.ACTION_REJECT, DBHelper.ACTION_SILENCE};
+    private final String[] actionLabels = {
+            "Block — مسدود بدون Reject دستی",
+            "Reject — مثل رد کردن دستی",
+            "Silence — فقط بی‌صدا"
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -85,7 +92,7 @@ public class MainActivity extends Activity {
         LinearLayout heroCard = card(0xFFFFFFFF, 0xFFE2E8F0, 22, 18);
         heroCard.addView(titleText("🛡️ مسدودکننده تماس"));
 
-        TextView subtitle = bodyText("شماره کامل یا پیش‌شماره را تعریف کن؛ تماس‌های مطابق قانون به‌صورت خودکار رد می‌شوند و در لاگ داخلی ثبت می‌شوند.");
+        TextView subtitle = bodyText("شماره کامل یا پیش‌شماره را تعریف کن و برای هر قانون روش برخورد با تماس را جداگانه انتخاب کن.");
         subtitle.setPadding(0, dp(10), 0, dp(14));
         heroCard.addView(subtitle);
 
@@ -134,23 +141,40 @@ public class MainActivity extends Activity {
         styleInput(ruleInput, "مثال: 09131101212 یا 092130*");
         addRuleCard.addView(ruleInput, matchWrapMargins(0, 8, 0, 10));
 
+        TextView actionHint = bodyText("روش برخورد با تماس");
+        actionHint.setTypeface(Typeface.DEFAULT_BOLD);
+        actionHint.setTextColor(0xFF334155);
+        addRuleCard.addView(actionHint, matchWrapMargins(0, 2, 0, 6));
+
+        actionSpinner = new Spinner(this);
+        ArrayAdapter<String> actionAdapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_dropdown_item, actionLabels);
+        actionSpinner.setAdapter(actionAdapter);
+        actionSpinner.setSelection(0);
+        actionSpinner.setBackground(makeRounded(0xFFF8FAFC, 0xFFD7DEEA, 16, 1));
+        addRuleCard.addView(actionSpinner, matchWrapMargins(0, 0, 0, 10));
+
+        TextView actionHelp = footnoteText("Block تماس را مسدود می‌کند ولی به شکل Reject دستی علامت نمی‌زند. Silence فقط زنگ را بی‌صدا می‌کند و تماس همچنان ورودی باقی می‌ماند.");
+        actionHelp.setPadding(0, 0, 0, dp(8));
+        addRuleCard.addView(actionHelp);
+
         Button add = primaryButton("افزودن قانون جدید");
         add.setOnClickListener(v -> addRule());
         addRuleCard.addView(add);
         root.addView(addRuleCard, matchWrapMargins(0, 14, 0, 0));
 
-        LinearLayout rulesCard = sectionCard("قوانین مسدودسازی", "شماره‌ها و پیش‌شماره‌هایی که باید ریجکت شوند");
+        LinearLayout rulesCard = sectionCard("قوانین مسدودسازی", "برای هر قانون می‌توانی روش Block، Reject یا Silence را جداگانه تغییر بدهی");
         rulesContainer = vertical();
         rulesCard.addView(rulesContainer, matchWrapMargins(0, 6, 0, 0));
         root.addView(rulesCard, matchWrapMargins(0, 14, 0, 0));
 
-        LinearLayout settingsCard = sectionCard("تنظیمات لاگ", "مدت نگهداری لاگ تماس‌های ردشده را مشخص کن");
+        LinearLayout settingsCard = sectionCard("تنظیمات لاگ", "مدت نگهداری لاگ تماس‌های Match شده را مشخص کن");
         retentionSpinner = new Spinner(this);
         retentionSpinner.setBackground(makeRounded(0xFFF8FAFC, 0xFFD7DEEA, 16, 1));
         settingsCard.addView(retentionSpinner, matchWrapMargins(0, 8, 0, 0));
         root.addView(settingsCard, matchWrapMargins(0, 14, 0, 0));
 
-        LinearLayout logCard = sectionCard("تماس‌های ردشده", "آخرین تماس‌هایی که توسط برنامه مسدود شده‌اند");
+        LinearLayout logCard = sectionCard("لاگ تماس‌ها", "آخرین تماس‌هایی که با یکی از قوانین برنامه Match شده‌اند");
         Button clear = dangerButton("پاک کردن لاگ");
         clear.setOnClickListener(v -> confirmClearLogs());
         logCard.addView(clear, wrapWrapMargins(0, 4, 0, 8));
@@ -200,7 +224,8 @@ public class MainActivity extends Activity {
             return;
         }
 
-        boolean added = db.addRule(input);
+        String action = actionValues[actionSpinner.getSelectedItemPosition()];
+        boolean added = db.addRule(input, action);
         if (added) {
             ruleInput.setText("");
             refreshRules();
@@ -222,11 +247,8 @@ public class MainActivity extends Activity {
 
         for (DBHelper.Rule rule : rules) {
             LinearLayout row = card(0xFFF8FAFC, 0xFFE3E8F2, 16, 12);
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            row.setGravity(Gravity.CENTER_VERTICAL);
             row.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
 
-            LinearLayout textWrap = vertical();
             String shown = rule.pattern + (rule.prefix ? "*" : "");
             TextView label = new TextView(this);
             label.setText(shown);
@@ -234,24 +256,59 @@ public class MainActivity extends Activity {
             label.setTypeface(Typeface.DEFAULT_BOLD);
             label.setTextColor(0xFF111827);
             label.setTextDirection(View.TEXT_DIRECTION_LTR);
-            textWrap.addView(label);
+            row.addView(label);
 
-            TextView sub = bodyText(rule.prefix ? "نوع قانون: پیش‌شماره" : "نوع قانون: شماره کامل");
+            TextView sub = bodyText((rule.prefix ? "نوع قانون: پیش‌شماره" : "نوع قانون: شماره کامل")
+                    + "  •  روش: " + actionShortLabel(rule.action));
             sub.setTextSize(13);
-            sub.setPadding(0, dp(4), 0, 0);
-            textWrap.addView(sub);
+            sub.setPadding(0, dp(4), 0, dp(8));
+            row.addView(sub);
 
-            row.addView(textWrap, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+            LinearLayout buttons = new LinearLayout(this);
+            buttons.setOrientation(LinearLayout.HORIZONTAL);
+            buttons.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+            buttons.setGravity(Gravity.CENTER_VERTICAL);
+
+            Button method = secondaryButton("تغییر روش: " + actionShortLabel(rule.action));
+            method.setOnClickListener(v -> showRuleActionDialog(rule));
+            buttons.addView(method, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
 
             Button del = dangerButton("حذف");
             del.setOnClickListener(v -> {
                 db.deleteRule(rule.id);
                 refreshRules();
             });
-            row.addView(del, wrapWrapMargins(8, 0, 0, 0));
+            buttons.addView(del, wrapWrapMargins(8, 0, 0, 0));
+            row.addView(buttons);
 
             rulesContainer.addView(row, matchWrapMargins(0, 0, 0, 10));
         }
+    }
+
+    private void showRuleActionDialog(DBHelper.Rule rule) {
+        new AlertDialog.Builder(this)
+                .setTitle("روش برخورد با تماس")
+                .setSingleChoiceItems(actionLabels, actionIndex(rule.action), (dialog, which) -> {
+                    db.updateRuleAction(rule.id, actionValues[which]);
+                    dialog.dismiss();
+                    refreshRules();
+                    Toast.makeText(this, "روش قانون به " + actionShortLabel(actionValues[which]) + " تغییر کرد", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("انصراف", null)
+                .show();
+    }
+
+    private int actionIndex(String action) {
+        for (int i = 0; i < actionValues.length; i++) {
+            if (actionValues[i].equals(action)) return i;
+        }
+        return 0;
+    }
+
+    private String actionShortLabel(String action) {
+        if (DBHelper.ACTION_REJECT.equals(action)) return "Reject";
+        if (DBHelper.ACTION_SILENCE.equals(action)) return "Silence";
+        return "Block";
     }
 
     private void refreshLogs() {
@@ -260,7 +317,7 @@ public class MainActivity extends Activity {
         setMetricValue(logsCountText, String.valueOf(logs.size()));
 
         if (logs.isEmpty()) {
-            logsContainer.addView(emptyState("تماس ردشده‌ای ثبت نشده است.", "بعد از اولین ریجکت، جزئیات تماس اینجا نمایش داده می‌شود."));
+            logsContainer.addView(emptyState("هنوز لاگی ثبت نشده است.", "بعد از اولین تماس Match شده، جزئیات و روش برخورد اینجا نمایش داده می‌شود."));
             return;
         }
 
@@ -283,7 +340,7 @@ public class MainActivity extends Activity {
             chips.addView(badge("قانون: " + log.matchedRule, 0xFFE8F0FE, 0xFF1D4ED8));
             View spacer = new View(this);
             chips.addView(spacer, new LinearLayout.LayoutParams(dp(8), 1));
-            chips.addView(badge("رد شد", 0xFFFDECEC, 0xFFB42318));
+            chips.addView(actionBadge(log.action));
             item.addView(chips);
 
             TextView time = footnoteText(fmt.format(new Date(log.createdAt)));
@@ -293,10 +350,20 @@ public class MainActivity extends Activity {
         }
     }
 
+    private TextView actionBadge(String action) {
+        if (DBHelper.ACTION_REJECT.equals(action)) {
+            return badge("Reject", 0xFFFDECEC, 0xFFB42318);
+        }
+        if (DBHelper.ACTION_SILENCE.equals(action)) {
+            return badge("Silence", 0xFFFEF3C7, 0xFFB45309);
+        }
+        return badge("Block", 0xFFDCFCE7, 0xFF15803D);
+    }
+
     private void confirmClearLogs() {
         new AlertDialog.Builder(this)
                 .setTitle("پاک کردن لاگ")
-                .setMessage("همه تماس‌های ردشده از لاگ داخلی برنامه حذف شوند؟")
+                .setMessage("همه لاگ‌های تماس از حافظه داخلی برنامه حذف شوند؟")
                 .setPositiveButton("بله", (d, w) -> {
                     db.clearLogs();
                     refreshLogs();

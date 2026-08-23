@@ -1,0 +1,121 @@
+name: Build Release APK
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+      - feature/per-rule-call-action
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    env:
+      RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+      RELEASE_STORE_PASSWORD_SECRET: ${{ secrets.RELEASE_STORE_PASSWORD }}
+      RELEASE_KEY_ALIAS_SECRET: ${{ secrets.RELEASE_KEY_ALIAS }}
+      RELEASE_KEY_PASSWORD_SECRET: ${{ secrets.RELEASE_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Prepare release signing
+        id: signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYSTORE="$RUNNER_TEMP/callblocker-release.jks"
+
+          if [[ -n "${RELEASE_KEYSTORE_BASE64:-}" && \
+                -n "${RELEASE_STORE_PASSWORD_SECRET:-}" && \
+                -n "${RELEASE_KEY_ALIAS_SECRET:-}" && \
+                -n "${RELEASE_KEY_PASSWORD_SECRET:-}" ]]; then
+            echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+            chmod 600 "$KEYSTORE"
+
+            echo "RELEASE_STORE_FILE=$KEYSTORE" >> "$GITHUB_ENV"
+            echo "RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD_SECRET" >> "$GITHUB_ENV"
+            echo "RELEASE_KEY_ALIAS=$RELEASE_KEY_ALIAS_SECRET" >> "$GITHUB_ENV"
+            echo "RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD_SECRET" >> "$GITHUB_ENV"
+            echo "mode=store" >> "$GITHUB_OUTPUT"
+            echo "Using permanent store signing key from GitHub Secrets."
+          else
+            PREVIEW_PASSWORD="callblocker-preview-only"
+            PREVIEW_ALIAS="callblocker-preview"
+
+            keytool -genkeypair \
+              -keystore "$KEYSTORE" \
+              -storepass "$PREVIEW_PASSWORD" \
+              -keypass "$PREVIEW_PASSWORD" \
+              -alias "$PREVIEW_ALIAS" \
+              -keyalg RSA \
+              -keysize 4096 \
+              -validity 3650 \
+              -dname "CN=CallBlocker Preview, OU=CI Preview, O=CallBlocker, C=IR"
+
+            echo "RELEASE_STORE_FILE=$KEYSTORE" >> "$GITHUB_ENV"
+            echo "RELEASE_STORE_PASSWORD=$PREVIEW_PASSWORD" >> "$GITHUB_ENV"
+            echo "RELEASE_KEY_ALIAS=$PREVIEW_ALIAS" >> "$GITHUB_ENV"
+            echo "RELEASE_KEY_PASSWORD=$PREVIEW_PASSWORD" >> "$GITHUB_ENV"
+            echo "mode=preview" >> "$GITHUB_OUTPUT"
+            echo "WARNING: permanent signing secrets are not configured."
+            echo "This APK is installable for testing but MUST NOT be uploaded to an app store."
+          fi
+
+      - name: Build release APK and AAB
+        run: gradle assembleRelease bundleRelease --stacktrace
+
+      - name: Verify APK signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          "$APKSIGNER" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
+
+      - name: Prepare release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-output
+          cp app/build/outputs/apk/release/app-release.apk \
+            "release-output/CallBlocker-v1.0.0-${{ steps.signing.outputs.mode }}.apk"
+          cp app/build/outputs/bundle/release/app-release.aab \
+            "release-output/CallBlocker-v1.0.0-${{ steps.signing.outputs.mode }}.aab"
+
+          {
+            echo "CallBlocker v1.0.0"
+            echo "Package: ir.imohsen.callblocker"
+            echo "Signing mode: ${{ steps.signing.outputs.mode }}"
+            if [[ "${{ steps.signing.outputs.mode }}" == "preview" ]]; then
+              echo "WARNING: Preview key. Do not publish this build to Cafe Bazaar or any other store."
+            else
+              echo "Store build: signed with the permanent key configured in GitHub Secrets."
+            fi
+          } > release-output/RELEASE-INFO.txt
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CallBlocker-${{ steps.signing.outputs.mode }}-release
+          path: release-output/*
+          if-no-files-found: error
+          retention-days: 30

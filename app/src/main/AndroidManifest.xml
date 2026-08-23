@@ -16,7 +16,7 @@
         android:theme="@style/AppTheme">
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.example.callblocker.MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -25,7 +25,7 @@
         </activity>
 
         <receiver
-            android:name=".BootReceiver"
+            android:name="com.example.callblocker.BootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
@@ -33,7 +33,7 @@
         </receiver>
 
         <service
-            android:name=".CallBlockScreeningService"
+            android:name="com.example.callblocker.CallBlockScreeningService"
             android:exported="true"
             android:permission="android.permission.BIND_SCREENING_SERVICE">
             <intent-filter>
